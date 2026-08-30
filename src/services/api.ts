@@ -175,7 +175,91 @@ export const api = {
     return false;
   },
 
-  // 6. Reset / Seed D1 Database helper
+  // 6. Add New Product (Admin)
+  async addProduct(product: Partial<Product>): Promise<Product | null> {
+    try {
+      const res = await fetch('/api/admin/products', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(product),
+      });
+      if (res.ok) {
+        const json = (await res.json()) as any;
+        if (json.success && json.data) {
+          const products = getLocalProducts();
+          products.unshift(json.data);
+          localStorage.setItem(STORAGE_PRODUCTS_KEY, JSON.stringify(products));
+          return json.data;
+        }
+      }
+    } catch {}
+
+    const newProd: Product = {
+      id: `prod-${Date.now().toString(36)}`,
+      name: product.name || 'New Product',
+      description: product.description || '',
+      price: product.price || 0,
+      original_price: product.original_price || null,
+      image: product.image || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=800&q=80',
+      category: product.category || 'Electronics',
+      stock: product.stock || 10,
+      rating: 5.0,
+      reviews_count: 0,
+    };
+    const products = getLocalProducts();
+    products.unshift(newProd);
+    localStorage.setItem(STORAGE_PRODUCTS_KEY, JSON.stringify(products));
+    return newProd;
+  },
+
+  // 7. Update Product (Admin)
+  async updateProduct(id: string, updates: Partial<Product>): Promise<boolean> {
+    try {
+      const res = await fetch(`/api/admin/products/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      });
+      if (res.ok) {
+        const products = getLocalProducts();
+        const idx = products.findIndex((p) => p.id === id);
+        if (idx !== -1) {
+          products[idx] = { ...products[idx], ...updates };
+          localStorage.setItem(STORAGE_PRODUCTS_KEY, JSON.stringify(products));
+        }
+        return true;
+      }
+    } catch {}
+
+    const products = getLocalProducts();
+    const idx = products.findIndex((p) => p.id === id);
+    if (idx !== -1) {
+      products[idx] = { ...products[idx], ...updates };
+      localStorage.setItem(STORAGE_PRODUCTS_KEY, JSON.stringify(products));
+      return true;
+    }
+    return false;
+  },
+
+  // 8. Delete Product (Admin)
+  async deleteProduct(id: string): Promise<boolean> {
+    try {
+      const res = await fetch(`/api/admin/products/${id}`, {
+        method: 'DELETE',
+      });
+      if (res.ok) {
+        const products = getLocalProducts().filter((p) => p.id !== id);
+        localStorage.setItem(STORAGE_PRODUCTS_KEY, JSON.stringify(products));
+        return true;
+      }
+    } catch {}
+
+    const products = getLocalProducts().filter((p) => p.id !== id);
+    localStorage.setItem(STORAGE_PRODUCTS_KEY, JSON.stringify(products));
+    return true;
+  },
+
+  // 9. Reset / Seed D1 Database helper
   async seedDatabase(): Promise<boolean> {
     try {
       const res = await fetch('/api/seed', { method: 'POST' });

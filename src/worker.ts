@@ -133,6 +133,127 @@ export default {
         });
       }
 
+      // POST /api/admin/login - Authenticate admin
+      if (path === '/api/admin/login' && method === 'POST') {
+        try {
+          const body = (await request.json()) as { email?: string; password?: string };
+          const email = (body.email || '').trim().toLowerCase();
+          const password = (body.password || '').trim();
+
+          const validAdmins = ['sh9145080@gmail.com', 'admin@testshop.com'];
+          if (validAdmins.includes(email) && password === 'admin123456') {
+            const token = 'admin_tok_' + crypto.randomUUID();
+            return jsonResponse({
+              success: true,
+              token,
+              email,
+              message: 'Authentication successful',
+            });
+          }
+          return errorResponse('অবৈধ ইমেইল অথবা পাসওয়ার্ড।', 401);
+        } catch {
+          return errorResponse('Invalid login payload', 400);
+        }
+      }
+
+      // POST /api/admin/products - Add new product
+      if (path === '/api/admin/products' && method === 'POST') {
+        try {
+          const body = (await request.json()) as any;
+          if (!body.name || !body.price) {
+            return errorResponse('Product name and price are required.');
+          }
+
+          const newId = body.id || `prod-${Date.now().toString(36)}`;
+          const product = {
+            id: newId,
+            name: body.name.trim(),
+            description: body.description || '',
+            price: Number(body.price) || 0,
+            original_price: body.original_price ? Number(body.original_price) : null,
+            image: body.image || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=800&q=80',
+            category: body.category || 'Electronics',
+            stock: Number(body.stock) || 10,
+            rating: Number(body.rating) || 5.0,
+            reviews_count: Number(body.reviews_count) || 0,
+          };
+
+          if (env.DB) {
+            await env.DB.prepare(
+              `INSERT INTO products (id, name, description, price, original_price, image, category, stock, rating, reviews_count)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+            )
+              .bind(
+                product.id,
+                product.name,
+                product.description,
+                product.price,
+                product.original_price,
+                product.image,
+                product.category,
+                product.stock,
+                product.rating,
+                product.reviews_count
+              )
+              .run();
+          }
+
+          return jsonResponse({ success: true, data: product, message: 'Product added successfully' }, 201);
+        } catch (err: any) {
+          return errorResponse(err?.message || 'Failed to add product', 500);
+        }
+      }
+
+      // PUT /api/admin/products/:id - Edit existing product
+      if (path.startsWith('/api/admin/products/') && (method === 'PUT' || method === 'PATCH')) {
+        const productId = path.replace('/api/admin/products/', '');
+        try {
+          const body = (await request.json()) as any;
+
+          if (env.DB) {
+            await env.DB.prepare(
+              `UPDATE products SET 
+                name = COALESCE(?, name),
+                description = COALESCE(?, description),
+                price = COALESCE(?, price),
+                original_price = COALESCE(?, original_price),
+                image = COALESCE(?, image),
+                category = COALESCE(?, category),
+                stock = COALESCE(?, stock)
+               WHERE id = ?`
+            )
+              .bind(
+                body.name || null,
+                body.description || null,
+                body.price ? Number(body.price) : null,
+                body.original_price ? Number(body.original_price) : null,
+                body.image || null,
+                body.category || null,
+                body.stock !== undefined ? Number(body.stock) : null,
+                productId
+              )
+              .run();
+          }
+
+          return jsonResponse({ success: true, message: 'Product updated successfully' });
+        } catch (err: any) {
+          return errorResponse(err?.message || 'Failed to update product', 500);
+        }
+      }
+
+      // DELETE /api/admin/products/:id - Delete product
+      if (path.startsWith('/api/admin/products/') && method === 'DELETE') {
+        const productId = path.replace('/api/admin/products/', '');
+        try {
+          if (env.DB) {
+            await env.DB.prepare('DELETE FROM products WHERE id = ?').bind(productId).run();
+          }
+          return jsonResponse({ success: true, message: 'Product deleted successfully' });
+        } catch (err: any) {
+          return errorResponse(err?.message || 'Failed to delete product', 500);
+        }
+      }
+
       // POST /api/seed - Seed database with sample products if empty
       if (path === '/api/seed' && method === 'POST') {
         if (!env.DB) {
